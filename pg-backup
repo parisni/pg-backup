@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Default values
+WORKERS=4
+DB=""
+DIR=""
+ACTION=""
+
+usage() {
+  echo "Usage:"
+  echo "  $0 dump|restore --worker N --db DBNAME --dir DIRECTORY"
+  exit 1
+}
+
+# ----- Parse action (first argument) -----
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+ACTION="$1"
+shift
+
+if [[ "$ACTION" != "dump" && "$ACTION" != "restore" ]]; then
+  echo "Error: first argument must be 'dump' or 'restore'"
+  usage
+fi
+
+# ----- Parse options -----
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --worker)
+      WORKERS="$2"
+      shift 2
+      ;;
+    --db)
+      DB="$2"
+      shift 2
+      ;;
+    --dir)
+      DIR="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      ;;
+  esac
+done
+
+# ----- Validate required arguments -----
+if [[ -z "$DB" || -z "$DIR" ]]; then
+  echo "Error: --db and --dir are required"
+  usage
+fi
+
+# ----- Execute -----
+if [[ "$ACTION" == "dump" ]]; then
+  echo "Starting dump of database '$DB' into directory '$DIR' with $WORKERS workers..."
+
+  pg_dump -U "${PGUSER:-$USER}" \
+    -d "$DB" \
+    -F d \
+    -j "$WORKERS" \
+    -Z 6 \
+    -f "$DIR"
+
+  echo "Dump completed successfully."
+
+elif [[ "$ACTION" == "restore" ]]; then
+  echo "Starting restore of database '$DB' from directory '$DIR' with $WORKERS workers..."
+
+  pg_restore -U "${PGUSER:-$USER}" \
+    -d "$DB" \
+    -j "$WORKERS" \
+    --clean \
+    --if-exists \
+    "$DIR"
+
+  echo "Restore completed successfully."
+fi
+
